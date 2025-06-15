@@ -2,6 +2,7 @@ const express = require("express");
 const connectDB = require("./config/database");
 const app = express();
 const { adminAuth } = require("./middlewares/auth");
+const User = require("./models/user");
 // Order matters--------------
 
 // USE IS USED TO MAP ALL HTTP METHODS API CALLS
@@ -85,6 +86,73 @@ const { adminAuth } = require("./middlewares/auth");
 //     res.status(500).send("something went wrong");
 //   }
 // });
+
+app.use(express.json());
+//It is a middleware to convert json into js object
+
+// get user by email
+app.get("/user", async (req, res) => {
+  const userEmail = req.body.emailID;
+
+  try {
+    const users = await User.find({ emailID: userEmail });
+    if (users.length == 0) {
+      res.status(404).send("User not found");
+    } else {
+      res.send(users);
+    }
+  } catch (err) {
+    res.status(400).send("Something went wronng");
+  }
+});
+
+//FEED API - get all the users from database
+app.get("/feed", async (req, res) => {
+  try {
+    const users = await User.find({});
+    res.send(users);
+  } catch (err) {
+    res.status(400).send("Something went wronng");
+  }
+});
+
+// Delete a user from database
+app.delete("/user", async (req, res) => {
+  const userId = req.body.userId;
+
+  try {
+    // const user = await User.findByIdAndDelete(userId);
+    const user = await User.findByIdAndDelete({ _id: userId });
+    res.send("user deleted successfully");
+  } catch (err) {
+    res.status(400).send("Something went wronng");
+  }
+});
+
+app.patch("/user", async (req, res) => {
+  const userId = req.body.userId;
+  const data = req.body;
+
+  try {
+    const user = await User.findByIdAndUpdate(userId, data, {
+      returnDocument: "before",
+    });
+    console.log(user);
+    res.send("Data is updated");
+  } catch (err) {
+    res.status(400).send("Something went wronng");
+  }
+});
+app.post("/signup", async (req, res) => {
+  const user = new User(req.body);
+
+  try {
+    await user.save();
+    res.send("User added successfully");
+  } catch (err) {
+    res.status(400).send("Error" + err.message);
+  }
+});
 
 connectDB()
   .then(() => {
