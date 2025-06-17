@@ -3,6 +3,9 @@ const connectDB = require("./config/database");
 const app = express();
 const { adminAuth } = require("./middlewares/auth");
 const User = require("./models/user");
+const { validateSignUpData } = require("./utils/validation");
+const bcrypt = require("bcrypt");
+const validator = require("validator");
 // Order matters--------------
 
 // USE IS USED TO MAP ALL HTTP METHODS API CALLS
@@ -129,28 +132,82 @@ app.delete("/user", async (req, res) => {
   }
 });
 
-app.patch("/user", async (req, res) => {
-  const userId = req.body.userId;
+app.patch("/user/:userId", async (req, res) => {
+  const userId = req.params?.userId;
   const data = req.body;
 
   try {
+    const ALLOWED_UPDATES = [
+      "firstName",
+      "lastName",
+      "photoUrl",
+      "about",
+      "skills",
+      "gender",
+      "age",
+    ];
+    const isUpdateAllowed = Object.keys(data).every((k) =>
+      ALLOWED_UPDATES.includes(k)
+    );
+    if (!isUpdateAllowed) {
+      throw new Error("Update not allowed");
+    }
+    if (data?.skills.length > 5) {
+      throw new Error("Cannot added more than 5 skills");
+    }
     const user = await User.findByIdAndUpdate(userId, data, {
       returnDocument: "before",
+      runValidators: true, // otherwise on update it donot check validators
     });
     console.log(user);
     res.send("Data is updated");
   } catch (err) {
-    res.status(400).send("Something went wronng");
+    res.status(400).send("UPDATE FAILED:" + err.message);
   }
 });
 app.post("/signup", async (req, res) => {
-  const user = new User(req.body);
-
   try {
+    // validation of data
+    validateSignUpData(req);
+
+    const { password, ...rest } = req.body;
+    // Encrypt the password
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = new User({
+      ...rest,
+      password: passwordHash,
+    });
+
+    // create new instance of User model
     await user.save();
     res.send("User added successfully");
   } catch (err) {
-    res.status(400).send("Error" + err.message);
+    res.status(400).send("Error :" + err.message);
+  }
+});
+
+app.post("/login", async (req, res) => {
+  try {
+    const { emailID, password } = req.body;
+    // validate the email
+    if (!validator.isEmail(emailID)) {
+      throw new Error("Email Id is not correct");
+    }
+    // find the email that is asked in database
+    const user = await User.findOne({ emailID: emailID });
+    if (!user) {
+      throw new Error("Invalid credentials");
+    }
+
+    //comapre the password
+    const isPasswordValid = await bcrypt.compare(password, user.password); // it returns true or false
+    if (!isPasswordValid) {
+      throw new Error("Invalid credentials");
+    } else {
+      res.send("Login Successfully!");
+    }
+  } catch (err) {
+    res.status(400).send("Error :" + err.message);
   }
 });
 
