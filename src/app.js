@@ -6,6 +6,8 @@ const User = require("./models/user");
 const { validateSignUpData } = require("./utils/validation");
 const bcrypt = require("bcrypt");
 const validator = require("validator");
+const cookieParser = require("cookie-parser");
+const jwt = require("jsonwebtoken");
 // Order matters--------------
 
 // USE IS USED TO MAP ALL HTTP METHODS API CALLS
@@ -91,6 +93,7 @@ const validator = require("validator");
 // });
 
 app.use(express.json());
+app.use(cookieParser());
 //It is a middleware to convert json into js object
 
 // get user by email
@@ -186,6 +189,29 @@ app.post("/signup", async (req, res) => {
   }
 });
 
+app.get("/profile", async (req, res) => {
+  try {
+    const cookies = req.cookies;
+
+    const { token } = cookies;
+    if (!token) {
+      throw new Error("Invalid Token");
+    }
+    // Validate my token
+    const decodedMessage = await jwt.verify(token, "DEV@Tinder$790");
+
+    const { _id } = decodedMessage;
+
+    const user = await User.findById(_id);
+    if (!user) {
+      throw new Error("User does not exist");
+    }
+    res.send(user);
+  } catch (err) {
+    res.status(400).send("Error :" + err.message);
+  }
+});
+
 app.post("/login", async (req, res) => {
   try {
     const { emailID, password } = req.body;
@@ -201,10 +227,15 @@ app.post("/login", async (req, res) => {
 
     //comapre the password
     const isPasswordValid = await bcrypt.compare(password, user.password); // it returns true or false
-    if (!isPasswordValid) {
-      throw new Error("Invalid credentials");
-    } else {
+    if (isPasswordValid) {
+      // Create a JWT Token
+
+      const token = jwt.sign({ _id: user._id }, "DEV@Tinder$790");
+      //Add token to cookie and sent response back to user
+      res.cookie("token", token);
       res.send("Login Successfully!");
+    } else {
+      throw new Error("Invalid credentials");
     }
   } catch (err) {
     res.status(400).send("Error :" + err.message);
